@@ -1,4 +1,5 @@
-# -*- coding: utf-8 -*-
+# https://dev.fitbit.com/build/reference/web-api/explore/fitbit-web-api-swagger.json
+
 import datetime
 import json
 import requests
@@ -244,67 +245,14 @@ class Fitbit(object):
             setattr(self, '%s_activities' % qualifier, curry(self.activity_stats, qualifier=qualifier))
             setattr(self, '%s_foods' % qualifier, curry(self._food_stats,
                                                         qualifier=qualifier))
-
-    def make_request(self, *args, **kwargs):
-        # This should handle data level errors, improper requests, and bad
-        # serialization
-        headers = kwargs.get('headers', {})
-        headers.update({'Accept-Language': self.system})
-        kwargs['headers'] = headers
-
-        method = kwargs.get('method', 'POST' if 'data' in kwargs else 'GET')
-        response = self.client.make_request(*args, **kwargs)
-
-        if response.status_code == 202:
-            return True
-        if method == 'DELETE':
-            if response.status_code == 204:
-                return True
-            else:
-                raise exceptions.DeleteError(response)
-        try:
-            rep = json.loads(response.content.decode('utf8'))
-        except ValueError:
-            raise exceptions.BadResponse
-
-        return rep
-
-    def user_profile_get(self, user_id=None):
-        """
-        Get a user profile. You can get other user's profile information
-        by passing user_id, or you can get the current user's by not passing
-        a user_id
-
-        .. note:
-            This is not the same format that the GET comes back in, GET requests
-            are wrapped in {'user': <dict of user data>}
-
-        https://dev.fitbit.com/docs/user/
-        """
-        url = "{0}/{1}/user/{2}/profile.json".format(*self._get_common_args(user_id))
-        return self.make_request(url)
-
-    def user_profile_update(self, data):
-        """
-        Set a user profile. You can set your user profile information by
-        passing a dictionary of attributes that will be updated.
-
-        .. note:
-            This is not the same format that the GET comes back in, GET requests
-            are wrapped in {'user': <dict of user data>}
-
-        https://dev.fitbit.com/docs/user/#update-profile
-        """
-        url = "{0}/{1}/user/-/profile.json".format(*self._get_common_args())
-        return self.make_request(url, data)
-
+            
     def _get_common_args(self, user_id=None):
-        common_args = (self.API_ENDPOINT, self.API_VERSION,)
-        if not user_id:
-            user_id = '-'
-        common_args += (user_id,)
-        return common_args
-
+            common_args = (self.API_ENDPOINT, self.API_VERSION,)
+            if not user_id:
+                user_id = '-'
+            common_args += (user_id,)
+            return common_args
+        
     def _get_date_string(self, date):
         if not isinstance(date, str):
             return date.strftime('%Y-%m-%d')
@@ -388,6 +336,113 @@ class Fitbit(object):
         filtered_kwargs = list(filter(filter_nones, data.items()))
         return {} if not filtered_kwargs else dict(filtered_kwargs)
 
+    def make_request(self, *args, **kwargs):
+        # This should handle data level errors, improper requests, and bad
+        # serialization
+        headers = kwargs.get('headers', {})
+        headers.update({'Accept-Language': self.system})
+        kwargs['headers'] = headers
+
+        method = kwargs.get('method', 'POST' if 'data' in kwargs else 'GET')
+        response = self.client.make_request(*args, **kwargs)
+
+        if response.status_code == 202:
+            return True
+        if method == 'DELETE':
+            if response.status_code == 204:
+                return True
+            else:
+                raise exceptions.DeleteError(response)
+        try:
+            rep = json.loads(response.content.decode('utf8'))
+        except ValueError:
+            raise exceptions.BadResponse
+
+        return rep
+
+    # ------------------
+
+    def get_user_profile(self, user_id=None):
+        """
+        Get a user profile. You can get other user's profile information
+        by passing user_id, or you can get the current user's by not passing
+        a user_id
+
+        .. note:
+            This is not the same format that the GET comes back in, GET requests
+            are wrapped in {'user': <dict of user data>}
+
+        https://dev.fitbit.com/docs/user/
+        """
+        url = "{0}/{1}/user/{2}/profile.json".format(*self._get_common_args(user_id))
+        return self.make_request(url)
+
+    def update_user_profile(self, data):
+        """
+        Set a user profile. You can set your user profile information by
+        passing a dictionary of attributes that will be updated.
+
+        .. note:
+            This is not the same format that the GET comes back in, GET requests
+            are wrapped in {'user': <dict of user data>}
+
+        https://dev.fitbit.com/docs/user/#update-profile
+        """
+        url = "{0}/{1}/user/-/profile.json".format(*self._get_common_args())
+        return self.make_request(url, data)
+    
+    def get_user_badges(self, user_id=None):
+        """
+        https://dev.fitbit.com/docs/friends/#badges
+        """
+        url = "{0}/{1}/user/{2}/badges.json".format(*self._get_common_args(user_id))
+        return self.make_request(url)
+
+    # Active Zone Minutes (AZM)
+    def get_azm_time_series(self, user_id=None, date=None, period=None):
+        """
+        https://dev.fitbit.com/build/reference/web-api/active-zone-minutes-timeseries/get-azm-timeseries-by-date/
+        period = 1d | 7d | 30d | 1w | 1m | 3m | 6m | 1y
+        date = YYYY-MM-DD
+        url = /{0}/user/[user-id]/activities/active-zone-minutes/date/[date]/[period].json
+        """
+        url = "{0}/{1}/user/{2}/activities/active-zone-minutes/date/{date}/{period}.json".format(*self._get_common_args(user_id), date=date, period=period)
+        return self.make_request(url)
+    
+    def get_azm_time_series_by_interval(self, start_date, end_date, user_id=None):
+        """
+        Get Active Zone Minutes (AZM) time series data for a specified date range.
+        
+        https://dev.fitbit.com/build/reference/web-api/active-zone-minutes-timeseries/get-azm-timeseries-by-interval/
+        
+        Arguments:
+            start_date -- The start date of the period, in the format YYYY-MM-DD or 'today'
+            end_date -- The end date of the period, in the format YYYY-MM-DD or 'today'
+            user_id -- The encoded ID of the user. Use None for current logged-in user.
+        
+        Returns:
+            dict containing the AZM data for each day in the specified range:
+                - activeZoneMinutes: Total count of active zone minutes
+                - fatBurnActiveZoneMinutes: Minutes in fat burn zone (1:1 ratio)
+                - cardioActiveZoneMinutes: Minutes in cardio zone (1:2 ratio)
+                - peakActiveZoneMinutes: Minutes in peak zone (1:2 ratio)
+        
+        Note: Maximum range is 1095 days
+        """
+        start_date_str = self._get_date_string(start_date)
+        end_date_str = self._get_date_string(end_date)
+        
+        url = "{0}/{1}/user/{2}/activities/active-zone-minutes/date/{start_date}/{end_date}.json".format(
+            *self._get_common_args(user_id),
+            start_date=start_date_str,
+            end_date=end_date_str
+        )
+        return self.make_request(url)
+    
+    # Activity
+    
+    
+    
     def body_fat_goal(self, fat=None):
         """
         Implements the following APIs
@@ -977,12 +1032,7 @@ class Fitbit(object):
         """
         return self.respond_to_invite(other_user_id, accept=False)
 
-    def get_badges(self, user_id=None):
-        """
-        https://dev.fitbit.com/docs/friends/#badges
-        """
-        url = "{0}/{1}/user/{2}/badges.json".format(*self._get_common_args(user_id))
-        return self.make_request(url)
+
 
     def subscription(self, subscription_id, subscriber_id, collection=None,
                      method='POST'):
@@ -1009,5 +1059,46 @@ class Fitbit(object):
         url = "{0}/{1}/user/-{collection}/apiSubscriptions.json".format(
             *self._get_common_args(),
             collection='/{0}'.format(collection) if collection else ''
+        )
+        return self.make_request(url)
+
+    def get_activity_time_series(self, resource, date, period, user_id=None):
+        """
+        Get activity time series data for a specific resource by date and period.
+        
+        https://dev.fitbit.com/build/reference/web-api/activity-timeseries/get-activity-timeseries-by-date/
+        
+        Arguments:
+            resource -- The resource to get data for. Supported values:
+                - activityCalories
+                - calories 
+                - caloriesBMR
+                - distance
+                - elevation
+                - floors
+                - minutesSedentary
+                - minutesLightlyActive
+                - minutesFairlyActive 
+                - minutesVeryActive
+                - steps
+                - swimming-strokes
+                Or tracker/* versions of above
+            date -- The end date of the period in YYYY-MM-DD format or 'today'
+            period -- The range period. Supported values: 1d, 7d, 30d, 1w, 1m, 3m, 6m, 1y
+            user_id -- The encoded ID of the user. Use None for current logged-in user.
+        
+        Returns:
+            dict containing the activity time series data
+        """
+        if period not in ['1d', '7d', '30d', '1w', '1m', '3m', '6m', '1y']:
+            raise ValueError("Period must be one of: 1d, 7d, 30d, 1w, 1m, 3m, 6m, 1y")
+        
+        date_string = self._get_date_string(date)
+        
+        url = "{0}/{1}/user/{2}/activities/{resource}/date/{date}/{period}.json".format(
+            *self._get_common_args(user_id),
+            resource=resource,
+            date=date_string,
+            period=period
         )
         return self.make_request(url)

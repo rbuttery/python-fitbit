@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 import cherrypy
+from dotenv import load_dotenv
 import os
+load_dotenv()
+import json
 import sys
 import threading
 import traceback
 import webbrowser
-
 from urllib.parse import urlparse
-from base64 import b64encode
 from fitbit.api import Fitbit
 from oauthlib.oauth2.rfc6749.errors import MismatchingStateError, MissingTokenError
 
@@ -83,11 +84,13 @@ class OAuth2Server:
 if __name__ == '__main__':
 
     if not (len(sys.argv) == 3):
-        print("Arguments: client_id and client_secret")
-        sys.exit(1)
-
-    server = OAuth2Server(*sys.argv[1:])
-    server.browser_authorize()
+        client_id = os.getenv('FITBIT_CLIENT_ID')
+        client_secret = os.getenv('FITBIT_CLIENT_SECRET')
+        server = OAuth2Server(client_id, client_secret)
+        server.browser_authorize()
+    else:
+        server = OAuth2Server(*sys.argv[1:])
+        server.browser_authorize()
 
     profile = server.fitbit.user_profile_get()
     print('You are authorized to access data for the user: {}'.format(
@@ -96,3 +99,8 @@ if __name__ == '__main__':
     print('TOKEN\n=====\n')
     for key, value in server.fitbit.client.session.token.items():
         print('{} = {}'.format(key, value))
+    
+    with open('token.json', 'w') as f:
+        json.dump(server.fitbit.client.session.token, f)        
+
+# bb0a2237af9edbb26e9f5880bbf7d61d447f2ecdb3f924ddc66063c8f90666d6
