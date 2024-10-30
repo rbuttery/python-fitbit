@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 import cherrypy
-from dotenv import load_dotenv
-import os
-load_dotenv()
 import json
+import os
 import sys
 import threading
 import traceback
 import webbrowser
-from urllib.parse import urlparse
-from fitbit.api import Fitbit
+from fitbit.auth import FitbitOauth2Client
 from oauthlib.oauth2.rfc6749.errors import MismatchingStateError, MissingTokenError
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class OAuth2Server:
     def __init__(self, client_id, client_secret,
@@ -22,34 +21,24 @@ class OAuth2Server:
             <br/><h3>You can close this window</h3>"""
         self.failure_html = """
             <h1>ERROR: %s</h1><br/><h3>You can close this window</h3>%s"""
-
-        self.fitbit = Fitbit(
+        self.fitbit = FitbitOauth2Client(
             client_id,
             client_secret,
-            redirect_uri=redirect_uri,
-            timeout=10,
+            redirect_uri=redirect_uri
         )
-
-        self.redirect_uri = redirect_uri
 
     def browser_authorize(self):
         """
         Open a browser to the authorization url and spool up a CherryPy
         server to accept the response
         """
-        url, _ = self.fitbit.client.authorize_token_url()
-        # Open the web browser in a new thread for command-line browser support
+        url, _ = self.fitbit.authorize_token_url()
+        # Open the web browser in a new thread for command-line python
         threading.Timer(1, webbrowser.open, args=(url,)).start()
-
-        # Same with redirect_uri hostname and port.
-        urlparams = urlparse(self.redirect_uri)
-        cherrypy.config.update({'server.socket_host': urlparams.hostname,
-                                'server.socket_port': urlparams.port})
-
         cherrypy.quickstart(self)
 
     @cherrypy.expose
-    def index(self, state, code=None, error=None):
+    def index(self, state=None, code=None, error=None):
         """
         Receive a Fitbit response containing a verification code. Use the code
         to fetch the access_token.
@@ -57,7 +46,7 @@ class OAuth2Server:
         error = None
         if code:
             try:
-                self.fitbit.client.fetch_access_token(code)
+                self.fitbit.fetch_access_token(code)
             except MissingTokenError:
                 error = self._fmt_failure(
                     'Missing access token parameter.</br>Please check that '
@@ -82,25 +71,15 @@ class OAuth2Server:
 
 
 if __name__ == '__main__':
+    client_id = os.getenv('FITBIT_CLIENT_ID')
+    client_secret = os.getenv('FITBIT_CLIENT_SECRET')
+    
+    server = OAuth2Server(
+        client_id,
+        client_secret
+    )
+    server.browser_authorize()
 
-    if not (len(sys.argv) == 3):
-        client_id = os.getenv('FITBIT_CLIENT_ID')
-        client_secret = os.getenv('FITBIT_CLIENT_SECRET')
-        server = OAuth2Server(client_id, client_secret)
-        server.browser_authorize()
-    else:
-        server = OAuth2Server(*sys.argv[1:])
-        server.browser_authorize()
-
-    profile = server.fitbit.user_profile_get()
-    print('You are authorized to access data for the user: {}'.format(
-        profile['user']['fullName']))
-
-    print('TOKEN\n=====\n')
-    for key, value in server.fitbit.client.session.token.items():
-        print('{} = {}'.format(key, value))
     
     with open('token.json', 'w') as f:
-        json.dump(server.fitbit.client.session.token, f)        
-
-# bb0a2237af9edbb26e9f5880bbf7d61d447f2ecdb3f924ddc66063c8f90666d6
+        json.dump(server.fitbit.session.token, f)   
